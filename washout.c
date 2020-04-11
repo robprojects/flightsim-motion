@@ -267,17 +267,17 @@ int differentiate(double *in, double *out, double *last) {
 int sim_params_init(struct sim_params *params) {
 	int i;
 	
-	params->Faa_scale_hp[0] = 0.2;
-	params->Faa_scale_hp[1] = 0.2;
-	params->Faa_scale_hp[2] = 0.2;
+	params->Faa_scale_hp[0] = 1.0;
+	params->Faa_scale_hp[1] = 1.0;
+	params->Faa_scale_hp[2] = 1.0;
 
 	params->Faa_limit_hp[0] = 5.0;
 	params->Faa_limit_hp[1] = 5.0;
 	params->Faa_limit_hp[2] = 5.0;
 
-	params->Oaa_scale_hp[0] = 0.5;
-	params->Oaa_scale_hp[1] = 0.5;
-	params->Oaa_scale_hp[2] = 0.5;
+	params->Oaa_scale_hp[0] = 1.0;
+	params->Oaa_scale_hp[1] = 1.0;
+	params->Oaa_scale_hp[2] = 1.0;
 
 	params->Oaa_limit_hp[0] = 100.0;
 	params->Oaa_limit_hp[1] = 100.0;
@@ -371,13 +371,15 @@ int compute2(double *faa, double *oaa, struct compute_state *state, struct sim_p
 
 	// Oaa -> scale/limit -> HP filter -> Tb -> HP filter -> integrate -> add tilt coord
 	// convert to radians
-	double oaa_r[3], oaa_r_d[3], oaa_l[3], oaa_l_f[3], oaa_l_f_r[3], oaa_l_f_r_f[3], oaa_ig[3];
+	double oaa_r[3], oaa_r_d[3], oaa_r_d2[3], oaa_l[3], oaa_l_f[3], oaa_l_f_r[3], oaa_l_f_r_f[3], oaa_ig[3], oaa_ig2[3];
  
 	deg2rad(oaa, oaa_r);
 	// differentiate to get angular rate 
 	differentiate(oaa_r, oaa_r_d, state->oaa_last);	
+        // differentiate again to get angular accel
+	differentiate(oaa_r_d, oaa_r_d2, state->oaa_last2);
 	// high pass scale and limit Oaa
-	scale_and_limit(oaa_r_d, oaa_l, params, F_O);
+	scale_and_limit(oaa_r_d2, oaa_l, params, F_O);
 	// HP filter
 	hp_filter_oaa(oaa_l, oaa_l_f, params, state->fs_o);
 	// Tb
@@ -390,12 +392,14 @@ int compute2(double *faa, double *oaa, struct compute_state *state, struct sim_p
 	// integrateW
 	integrate(oaa_l_f_r_f, oaa_ig, state->oaa_sum);
 
+	integrate(oaa_ig, oaa_ig2, state->oaa_sum2);
+
 	double oaa_ig_filt[3];
 
 	if (params->final_filt)
-		lp_filter_oaa_final(oaa_ig, oaa_ig_filt, params, state->fs_o_f);
+		lp_filter_oaa_final(oaa_ig2, oaa_ig_filt, params, state->fs_o_f);
 	else
-		for (i=0; i<3; i++) oaa_ig_filt[i]=oaa_ig[i];
+		for (i=0; i<3; i++) oaa_ig_filt[i]=oaa_ig2[i];
 
 	DUMP(state->oaa_sum);
 	DUMP(oaa);

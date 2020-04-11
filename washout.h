@@ -39,9 +39,11 @@ struct compute_state {
 	struct f_state fs_o_f[3];
 	double faa_sum[3], faa_sum2[3];
 	double oaa_last[3];
+        double oaa_last2[3];
 	struct f_state fs_o[3];
 	struct f_state fs_o2[3];
 	double oaa_sum[3];
+	double oaa_sum2[3];
 	double tc_roll;
 	double tc_pitch;
 };

@@ -26,7 +26,7 @@
 
 #define NUM_GRAPH 3
 
-int graph_pos;
+int graph_pos = 0;
 float graph[NUM_GRAPH][640];
 
 struct motion_geo geo;
@@ -264,9 +264,9 @@ void timer(int v) {
 		graph[2][graph_pos] = (float) act_state[hilight].actual_pos;
 		break;
 		case 6:
-		graph[0][graph_pos] = Oaa[0]; //pos.theta;
-		graph[1][graph_pos] = Oaa[1]; //pos.psi;
-		graph[2][graph_pos] = Oaa[2]; //pos.phi;
+		graph[0][graph_pos] = pos.theta;
+		graph[1][graph_pos] = pos.psi;
+		graph[2][graph_pos] = pos.phi;
 		break;
 		case 7:
 		graph[0][graph_pos] = pos.T[0];
@@ -635,6 +635,32 @@ void display(void) {
 			glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *c);
 			pos+=9;
 		}
+	}
+	char gtext[100];
+	switch (hilight) {
+
+		case 0:
+		case 1:
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+		sprintf(gtext, "ACTUATOR %d", hilight);
+		break;
+		case 6:
+		sprintf(gtext, "pos.theta/psi/phi");
+		break;
+		case 7:
+		sprintf(gtext, "T[3]");
+		break;
+	}
+	glColor3f(1.0, 1.0, 1.0);
+	char *c = gtext;
+	int pos = 320 - (strlen(gtext)*9)/2;
+	for ( ; *c!='\0'; c++) {
+		glRasterPos2f(pos,50);
+		glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *c);
+		pos+=9;
 	}
 
 	
