@@ -41,8 +41,10 @@ typedef struct {
 	pthread_t udp_thread;
 	int run;
 	int s;
-	struct sockaddr_in si;
-	int slen;
+	//struct sockaddr_in si;
+	//int slen;
+	char *server;
+	int sample;
 } xplane_udp_state_t;
 
 void *xplane_udp_run(void *state);
@@ -76,7 +78,9 @@ struct dref_struct_out {
 void *xplane_init(char *server, int sample) {
 	xplane_udp_state_t *state = malloc(sizeof(xplane_udp_state_t));
 	// xplane udp
-	xplane_udp_setup(state, server, sample);
+	state->server = strdup(server);
+	state->sample = sample;
+	xplane_udp_setup(state);
 
 	pthread_create(&(state->udp_thread), NULL, xplane_udp_run, (void *) state);	
 	return state;
@@ -186,15 +190,15 @@ int calculate_accel(xplane_udp_state_t *state) {
 	state->a_axil=a_axil;
 }
 
-int xplane_udp_setup(xplane_udp_state_t *state, char *server, int sample) {
+int xplane_udp_setup(xplane_udp_state_t *state) {
 	int s_bcn;
-	struct sockaddr_in si_bcn;
+	struct sockaddr_in si_bcn, si;
 	struct ip_mreq mreq;
 	int slen_bcn = sizeof(si_bcn);
 	int recv_len;
 	int yes=1;
 	char buf[BUFLEN];
-	state->slen=sizeof(struct sockaddr_in);
+	int slen=sizeof(struct sockaddr_in);
 	
 #ifdef BECN
 	struct becn_struct {
@@ -239,40 +243,64 @@ int xplane_udp_setup(xplane_udp_state_t *state, char *server, int sample) {
 #endif
 	// socket for rrefs
 	state->s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-	memset((char*) &state->si, 0, sizeof(state->si));
-	state->si.sin_family = AF_INET;
-	state->si.sin_port = htons(PORT);
-	inet_aton(server, &state->si.sin_addr);
+
+	memset((char*) &si, 0, sizeof(si));
+	si.sin_family = AF_INET;
+	si.sin_port = htons(PORT);
+	inet_aton(state->server, &(si.sin_addr));
 
 	int i;
 	for (i=0; i<15; i++) {
-		printf("%s %d\n", dataref_name[i], i);
-		register_dataref(state->s, &state->si, i, dataref_name[i], sample); 
+		//printf("%s %d\n", dataref_name[i], i);
+		register_dataref(state->s, &si, i, dataref_name[i], state->sample); 
 	}
 }
 
 void *xplane_udp_run(void *state_v) {
 	xplane_udp_state_t *state = (xplane_udp_state_t *) state_v;
 	int recv_len;
+	int slen;
 	char buf[BUFLEN];
+	struct sockaddr_in si;
+
+	memset((char*) &si, 0, sizeof(si));
+	si.sin_family = AF_INET;
+//	si.sin_port = htons(PORT);
+	inet_aton(state->server, &(si.sin_addr));
+
 	while(state->run) {
 		struct dref_struct_out *dref;
 		int cnt = 0;
-		recv_len = recvfrom(state->s, buf, BUFLEN, 0, (struct sockaddr *) &state->si, &state->slen);
-		//printf("received %d\n", recv_len);
-		dref = (struct dref_struct_out *) (buf+5);
-		while (cnt + sizeof(struct dref_struct_out) <= recv_len) {
-			//printf("%d\t%f\n", dref->dref_en, dref->dref_flt);
-			if (dref->dref_en>=0 && dref->dref_en<14) {
-				dataref_val[dref->dref_en] = dref->dref_flt;
+		fd_set readfds;
+		struct timeval timeout;
+		FD_ZERO(&readfds);
+		FD_SET(state->s, &readfds);
+		timeout.tv_sec = 1;
+		timeout.tv_usec = 0;
+		//printf("waiting...\n");
+		int t = select(state->s + 1, &readfds, NULL, NULL, &timeout);
+		if (t>0 && FD_ISSET(state->s, &readfds)) {
+			//printf("got data\n");
+			recv_len = recvfrom(state->s, buf, BUFLEN, 0, (struct sockaddr *) &si, &slen);
+			//printf("received %d\n", recv_len);
+			dref = (struct dref_struct_out *) (buf+5);
+			while (cnt + sizeof(struct dref_struct_out) <= recv_len) {
+				//printf("%d\t%f\n", dref->dref_en, dref->dref_flt);
+				if (dref->dref_en>=0 && dref->dref_en<14) {
+					dataref_val[dref->dref_en] = dref->dref_flt;
+				}
+				if (dref->dref_en == PAUSE) {
+					paused = (int) dref->dref_flt;
+				}
+				cnt += sizeof(struct dref_struct_out);
+				dref++;
 			}
-			if (dref->dref_en == PAUSE) {
-				paused = (int) dref->dref_flt;
-			}
-			cnt += sizeof(struct dref_struct_out);
-			dref++;
+			calculate_accel(state);
+		} else {
+			//printf("timeout...\n");
+			xplane_udp_setup(state);
+			paused = 1;
 		}
-		calculate_accel(state);
 	}
 }
 /*
