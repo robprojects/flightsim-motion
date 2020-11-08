@@ -3,7 +3,7 @@ CFLAGS=-g
 
 all: motion
 
-motion : motion.o washout.o xplane.o geo6dof.o matrix.o actuator.o nolimits2.o
+motion : motion.o washout.o xplane.o geo6dof.o matrix.o actuator.o nolimits2.o rfactor.o
 
 
 clean:

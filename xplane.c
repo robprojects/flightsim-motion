@@ -90,15 +90,15 @@ int xplane_readnext(void *sstate, double *Faa, double *Oaa, int *valid) {
 	float theta, psi, phi, y, z, x;
 	xplane_udp_state_t *udp_state=(xplane_udp_state_t *) sstate;
 
-	theta = udp_state->theta;
-	psi=udp_state->psi;
-	phi=udp_state->phi;
-	y=udp_state->a_side;
-	z=udp_state->a_nrml;
-	x=udp_state->a_axil;
+	theta = udp_state->theta; // pitch
+	psi=udp_state->psi; // yaw
+	phi=udp_state->phi; // roll
+	y=udp_state->a_side; // sideways
+	z=udp_state->a_nrml; // upward
+	x=udp_state->a_axil; // backward
 
 	Oaa[2] = theta; Oaa[1] = psi; Oaa[0] = phi;
-	Faa[0] = y; Faa[1] = x; Faa[2] = z;
+	Faa[0] = -y; Faa[1] = x; Faa[2] = z;
 
 	*valid = !paused;
 	
@@ -190,6 +190,8 @@ int calculate_accel(xplane_udp_state_t *state) {
 	state->a_axil=a_axil;
 }
 
+//#define BECN
+
 int xplane_udp_setup(xplane_udp_state_t *state) {
 	int s_bcn;
 	struct sockaddr_in si_bcn, si;
@@ -217,23 +219,28 @@ int xplane_udp_setup(xplane_udp_state_t *state) {
 		printf("coudn't create beacon socket\n");
 		exit(1);
 	}
-	memset((char *)&si_bcn, 0, sizeof(s_bcn));
+	memset((char *)&si_bcn, 0, sizeof(si_bcn));
 	si_bcn.sin_family = AF_INET;
 	si_bcn.sin_addr.s_addr = htonl(INADDR_ANY);
 	si_bcn.sin_port = htons(MULTICAST_PORT);
 
-	mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_GROUP);
-	mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-	setsockopt(s_bcn, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
-
 	setsockopt(s_bcn, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+	setsockopt(s_bcn, SOL_SOCKET, SO_REUSEPORT, &yes, sizeof(yes));
 
 
 	if (bind(s_bcn, (struct sockaddr *) &si_bcn, slen_bcn)<0) {
 		printf("couldn't bind beacon socket\n");
 		exit(1);
 	}
+
+	mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_GROUP);
+	mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+	if (setsockopt(s_bcn, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+		printf("subscribe to multicast failed\n");
+	}
+
 	while(1) {
+		printf("waiting for beacon\n");
 		int len = recvfrom(s_bcn, buf, sizeof(buf), 0, (struct sockaddr *) &si_bcn, &slen_bcn);
 		printf("%d\n", len);
 		memcpy(&bcn, buf, sizeof(bcn));
@@ -280,8 +287,8 @@ void *xplane_udp_run(void *state_v) {
 		//printf("waiting...\n");
 		int t = select(state->s + 1, &readfds, NULL, NULL, &timeout);
 		if (t>0 && FD_ISSET(state->s, &readfds)) {
-			//printf("got data\n");
 			recv_len = recvfrom(state->s, buf, BUFLEN, 0, (struct sockaddr *) &si, &slen);
+
 			//printf("received %d\n", recv_len);
 			dref = (struct dref_struct_out *) (buf+5);
 			while (cnt + sizeof(struct dref_struct_out) <= recv_len) {

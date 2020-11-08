@@ -267,25 +267,25 @@ int differentiate(double *in, double *out, double *last) {
 int sim_params_init(struct sim_params *params) {
 	int i;
 	
-	params->Faa_scale_hp[0] = 1.0;
-	params->Faa_scale_hp[1] = 1.0;
-	params->Faa_scale_hp[2] = 1.0;
+	params->Faa_scale_hp[0] = 0.8;
+	params->Faa_scale_hp[1] = 0.8;
+	params->Faa_scale_hp[2] = 0.8;
 
 	params->Faa_limit_hp[0] = 5.0;
 	params->Faa_limit_hp[1] = 5.0;
 	params->Faa_limit_hp[2] = 5.0;
 
-	params->Oaa_scale_hp[0] = 1.0;
-	params->Oaa_scale_hp[1] = 1.0;
-	params->Oaa_scale_hp[2] = 1.0;
+	params->Oaa_scale_hp[0] = 0.8;
+	params->Oaa_scale_hp[1] = 0.8;
+	params->Oaa_scale_hp[2] = 0.8;
 
 	params->Oaa_limit_hp[0] = 100.0;
 	params->Oaa_limit_hp[1] = 100.0;
 	params->Oaa_limit_hp[2] = 100.0;
 
-	params->Faa_scale_lp[0] = 1.0;
-	params->Faa_scale_lp[1] = 1.0;
-	params->Faa_scale_lp[2] = 1.0;
+	params->Faa_scale_lp[0] = 0.8;
+	params->Faa_scale_lp[1] = 0.8;
+	params->Faa_scale_lp[2] = 0.8;
 
 	params->Faa_limit_lp[0] = 10.0;
 	params->Faa_limit_lp[1] = 10.0;
@@ -294,30 +294,44 @@ int sim_params_init(struct sim_params *params) {
 	params->max_pitch = 0.005;
 	params->max_roll = 0.005;
 
+	params->d_oaa = 2;
+
+	params->lpfilt_faa_z = 0.707;
+	params->lpfilt_faa_o = 1.25;
+
 	// compute filter coefficients
 	for (i=0; i<3; i++) {
-		fc_lopass(SAMPLE, 1.25, 0.707, &(params->lpfilt_faa[i]));
+		fc_lopass(SAMPLE, params->lpfilt_faa_o, params->lpfilt_faa_z, &(params->lpfilt_faa[i]));
 	}	
 
+	params->lpfilt_faa_final_z = 0.707;
+	params->lpfilt_faa_final_o = 4.0;
 	for (i=0; i<3; i++) {
-		fc_lopass(SAMPLE, 4.0, 0.707, &(params->lpfilt_faa_final[i]));
+		fc_lopass(SAMPLE, params->lpfilt_faa_final_o, params->lpfilt_faa_final_z, &(params->lpfilt_faa_final[i]));
 	}	
-
+	params->lpfilt_oaa_final_z = 0.707;
+	params->lpfilt_oaa_final_o = 4.0;
 	for (i=0; i<3; i++) {
-		fc_lopass(SAMPLE, 4.0, 0.707, &(params->lpfilt_oaa_final[i]));
+		fc_lopass(SAMPLE, params->lpfilt_oaa_final_o, params->lpfilt_oaa_final_z, &(params->lpfilt_oaa_final[i]));
 	}
-
+	params->hpfilt_faa_z = 0.707;
+	params->hpfilt_faa_o = 1.25;
+	params->hpfilt_faa_c_o = 0.125;
 	for (i=0; i<3; i++) {
-		fc_hipass_1(SAMPLE, 1.25, 0.707, &(params->hpfilt_faa[i]));
-		fc_hipass_2(SAMPLE, 0.125, &(params->hpfilt_faa_c[i]));
+		fc_hipass_1(SAMPLE, params->hpfilt_faa_o, params->hpfilt_faa_z, &(params->hpfilt_faa[i]));
+		fc_hipass_2(SAMPLE, params->hpfilt_faa_c_o, &(params->hpfilt_faa_c[i]));
+	}
+	params->hpfilt_faa_2_o = 1.25;
+	params->hpfilt_faa_2_z = 0.707;
+	params->hpfilt_faa_2_c_o = 0.125;
+	for (i=0; i<3; i++) {
+		fc_hipass_1(SAMPLE, params->hpfilt_faa_2_o, params->hpfilt_faa_2_z, &(params->hpfilt_faa_2[i]));
+		fc_hipass_2(SAMPLE, params->hpfilt_faa_2_c_o, &(params->hpfilt_faa_2_c[i]));
 	}	
+	params->hpfilt_oaa_z = 0.707;
+	params->hpfilt_oaa_o = 5.0;
 	for (i=0; i<3; i++) {
-		fc_hipass_1(SAMPLE, 1.25, 0.707, &(params->hpfilt_faa_2[i]));
-		fc_hipass_2(SAMPLE, 0.125, &(params->hpfilt_faa_2_c[i]));
-	}	
-
-	for (i=0; i<3; i++) {
-		fc_hipass_1(SAMPLE, 5.0, 0.707, &(params->hpfilt_oaa[i]));
+		fc_hipass_1(SAMPLE, params->hpfilt_oaa_o, params->hpfilt_oaa_z, &(params->hpfilt_oaa[i]));
 	}
 }
 
@@ -378,6 +392,18 @@ int compute2(double *faa, double *oaa, struct compute_state *state, struct sim_p
 	differentiate(oaa_r, oaa_r_d, state->oaa_last);	
         // differentiate again to get angular accel
 	differentiate(oaa_r_d, oaa_r_d2, state->oaa_last2);
+
+	// FIXME! Rfactor gives angular accel in radians/s2
+	switch(params->d_oaa) {
+		case 0:
+		for (i=0; i<3; i++) oaa_r_d2[i] = oaa[i];
+		break;
+		case 1:
+		for (i=0; i<3; i++) oaa_r_d2[i] = oaa_r_d[i];
+		break;
+		case 2:
+		break;
+	}
 	// high pass scale and limit Oaa
 	scale_and_limit(oaa_r_d2, oaa_l, params, F_O);
 	// HP filter

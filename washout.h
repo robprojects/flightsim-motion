@@ -19,7 +19,24 @@ struct sim_params {
 	double max_roll;
 
 	int final_filt;
+	int d_oaa;
 	
+	// filter params
+	double lpfilt_faa_z;
+	double lpfilt_faa_o;
+	double lpfilt_faa_final_z;
+	double lpfilt_faa_final_o;
+	double lpfilt_oaa_final_z;
+	double lpfilt_oaa_final_o;
+	double hpfilt_faa_z;
+	double hpfilt_faa_o;
+	double hpfilt_faa_c_o;
+	double hpfilt_faa_2_o;
+	double hpfilt_faa_2_z;
+	double hpfilt_faa_2_c_o;
+	double hpfilt_oaa_z;
+	double hpfilt_oaa_o;
+
 	// filter coefficients
 	struct f_co lpfilt_faa[3];
 	struct f_co lpfilt_faa_final[3];

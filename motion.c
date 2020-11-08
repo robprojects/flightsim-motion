@@ -16,6 +16,7 @@
 #include <float.h>
 
 #include "xplane.h"
+#include "rfactor.h"
 #include "nolimits2.h"
 #include "motion.h"
 #include "washout.h"
@@ -342,6 +343,7 @@ int main(int argc, char **argv) {
 		{"file", required_argument, 0, 'f'},
 		{"xplane", required_argument, 0, 'x'},
 		{"nolimits2", required_argument, 0, 'l'},
+		{"rfactor", required_argument, 0, 'r'},
 		{"manual", no_argument, 0, 'm'},
 		{"nodevice", no_argument, 0, 'n'},
 		{0,0,0,0}
@@ -351,7 +353,7 @@ int main(int argc, char **argv) {
 
 	source_readnext = null_readnext;
 
-	while ((opt = getopt_long(argc, argv, "nmf:x:l:", long_options, &longindex)) != -1) {
+	while ((opt = getopt_long(argc, argv, "nmf:x:l:r:", long_options, &longindex)) != -1) {
 		switch(opt) {
 			case 'n':
 			nodevice = 1;
@@ -370,6 +372,11 @@ int main(int argc, char **argv) {
 			source_readnext = xplane_readnext;
 			do_washout = 1;
 			params.final_filt = 1;
+			break;
+			case 'r':
+			source_state = rf2_init(optarg, (int)SAMPLE);
+			source_readnext = rf2_readnext;
+			do_washout = 1;
 			break;
 			case 'l':
 			source_state = nolimits2_init(optarg, (int)SAMPLE);
